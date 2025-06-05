@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scan Student's QR</title>
+    <style>
+        body {
+            background-image: url(/image/bg21.jpg);
+            color: white;
+            margin: 5px;
+            padding: 100px;
+            justify-content: center;
+        }
+    </style>  
+</head>
+<body>
+    <div id="you-qr-result"></div>
+    <div style="text-align: center; font-size: 2rem;"><h1>Scan Student's QR</h1></div>
+    <div style="display: flex; justify-content: center;"> 
+        <div id="my-qr-reader" style="width: 550px; height: 250px;"></div>
+    </div>
+    <p style="text-align: center;">Go To <a style="color: white;" href="/html/home/index4.html">Home</a></p>
+    
+    <!-- Table to display student attendance details -->
+    <div style="display: flex; justify-content: center; margin-top: 20px;">
+        <table id="attendance-table" border="1" style="color: white; border-collapse: collapse; width: 70%;">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Index</th>
+                    <th>Registration Number</th>
+                    <th>Batch</th>
+                    <th>Attendance Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Student details will be inserted here -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Load library -->
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script>
+        // Check if DOM is ready
+        function domReady(fn) {
+            if (document.readyState === "complete" || document.readyState === "interactive") {
+                setTimeout(fn, 1);
+            } else {
+                document.addEventListener("DOMContentLoaded", fn);
+            }
+        }
+
+        domReady(function() {
+            var myqr = document.getElementById('you-qr-result');
+            var lastResult, countResults = 0;
+
+            // IF FOUND YOUR QR CODE
+            function onScanSuccess(decodeText, decodeResult) {
+                if (decodeText !== lastResult) {
+                    ++countResults;
+                    lastResult = decodeText;
+
+                    // Send the scanned data to the server
+                    fetch('/scan-qr', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ data: decodeText })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            alert("Attendance marked successfully for: " + decodeText);
+                            // Update the table with student details
+                            updateAttendanceTable(data.student);
+                        } else {
+                            alert("Error: " + data.message);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert("Error marking attendance. Please try again.");
+                    });
+
+                    // AND ADD TO YOUR QR IN TOP 
+                    myqr.innerHTML = `You scanned ${countResults}: ${decodeText}`;
+                }
+            }
+
+            // Function to update the attendance table with student details
+            function updateAttendanceTable(student) {
+                var tableBody = document.getElementById('attendance-table').getElementsByTagName('tbody')[0];
+                var newRow = tableBody.insertRow();
+                
+                newRow.insertCell(0).innerText = student.Name;
+                newRow.insertCell(1).innerText = student.Index;
+                newRow.insertCell(2).innerText = student.Reg;
+                newRow.insertCell(3).innerText = student.batch;
+                newRow.insertCell(4).innerText = 'Present';
+            }
+
+            // Render the QR code scanner
+            var htmlscanner = new Html5QrcodeScanner("my-qr-reader", { fps: 10, qrbox: 250 });
+            htmlscanner.render(onScanSuccess);
+        });
+    </script>
+</body>
+</html>

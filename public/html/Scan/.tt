@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student QR Code Scanner</title>
+    <style>
+        body {
+            background-image: url(/image/bg21.jpg);
+            color: white;
+            margin: 5px;
+            padding: 100px;
+            justify-content: center;
+            font-family: Arial, sans-serif;
+        }
+        
+        h1 {
+            text-align: center;
+            font-size: 2rem;
+            margin-bottom: 20px;
+        }
+
+        #my-qr-reader {
+            width: 550px;
+            height: 250px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: center;
+        }
+
+        table {
+            margin: 20px auto;
+            width: 90%;
+            border-collapse: collapse;
+            color: white;
+            font-size: 1rem;
+        }
+
+        th, td {
+            border: 1px solid white;
+            padding: 10px;
+            text-align: center;
+        }
+
+        th {
+            background-color: #333;
+        }
+
+        .btn {
+            margin: 10px;
+            padding: 10px 20px;
+            background-color: #444;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn:hover {
+            background-color: #555;
+        }
+
+        a {
+            color: white;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="you-qr-result"></div>
+    <h1>Scan Student's QR</h1>
+    <div id="my-qr-reader"></div>
+    <p style="text-align: center;">
+        Go To <a href="/html/home/index4.html">Home</a>
+    </p>
+
+    <h1>Student List</h1>
+    <a href="/report-pdf" class="btn">Download Attendance Report (PDF)</a>
+    <button id="resetButton" class="btn">Reset Attendance</button>
+
+    <table id="student-table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Index</th>
+                <th>Reg</th>
+                <th>Batch</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Student rows will be added here dynamically -->
+        </tbody>
+    </table>
+
+    <!-- Load library -->
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script>
+        // Function to execute when DOM is ready
+        function domReady(fn) {
+            if (document.readyState === "complete" || document.readyState === "interactive") {
+                setTimeout(fn, 1);
+            } else {
+                document.addEventListener("DOMContentLoaded", fn);
+            }
+        }
+
+        // Initialize QR Code Scanner and Student Table
+        domReady(function () {
+            var myqr = document.getElementById('you-qr-result');
+            var lastResult = null;
+
+            // On successful scan
+            function onScanSuccess(decodedText, decodedResult) {
+                if (decodedText !== lastResult) {
+                    lastResult = decodedText;
+                    try {
+                        // Parse the QR code data (assuming delimited string format)
+                        const studentData = parseStudentData(decodedText);
+
+                        if (validateStudentData(studentData)) {
+                            // Add or update student in the table
+                            addOrUpdateStudent(studentData);
+
+                            // Provide feedback to the user
+                            alert("QR Code Scanned: " + decodedText);
+                            myqr.innerHTML = `Scanned Student: ${studentData.Name} (Index: ${studentData.Index})`;
+                        } else {
+                            alert('Invalid QR Code Data');
+                        }
+                    } catch (error) {
+                        alert('Error parsing QR Code data: ' + error.message);
+                    }
+                }
+            }
+
+            // Function to parse student data from QR code string
+            function parseStudentData(data) {
+                const dataArray = data.split(',');
+                const studentData = {};
+
+                // Loop through each item and extract key-value pairs
+                dataArray.forEach(item => {
+                    const [key, value] = item.split(':').map(s => s.trim());
+                    studentData[key] = value;
+                });
+
+                return studentData;
+            }
+
+            // Function to validate student data
+            function validateStudentData(studentData) {
+                // Check if all required fields are present and correctly formatted
+                if (!studentData.Name || !studentData.Index || !studentData.Reg || !studentData.Batch) {
+                    return false;
+                }
+
+                // Check if Index is a number
+                if (isNaN(studentData.Index)) {
+                    return false;
+                }
+
+                // Additional validations can be added here if needed
+
+                return true;
+            }
+
+            // Render QR Code Scanner
+            var htmlScanner = new Html5QrcodeScanner(
+                "my-qr-reader", { fps: 10, qrbox: 250 }
+            );
+            htmlScanner.render(onScanSuccess);
+
+            // Fetch initial student data and populate the table
+            fetchStudents();
+        });
+
+        // Function to add or update student in the table
+        function addOrUpdateStudent(student) {
+            const tableBody = document.querySelector('#student-table tbody');
+            let row = document.querySelector(`#student-table tbody tr[data-index='${student.Index}']`);
+
+            if (row) {
+                // Update existing row
+                row.innerHTML = `
+                    <td>${student.Name}</td>
+                    <td>${student.Index}</td>
+                    <td>${student.Reg}</td>
+                    <td>${student.Batch}</td>
+                    <td>
+                        <button id="attend-${student.Index}" onclick="markAttendance('${student.Index}')">
+                            Attended
+                        </button>
+                    </td>
+                `;
+            } else {
+                // Add new row
+                row = document.createElement('tr');
+                row.setAttribute('data-index', student.Index);
+                row.innerHTML = `
+                    <td>${student.Name}</td>
+                    <td>${student.Index}</td>
+                    <td>${student.Reg}</td>
+                    <td>${student.Batch}</td>
+                    <td>
+                        <button id="attend-${student.Index}" onclick="markAttendance('${student.Index}')">
+                            Attend
+                        </button>
+                    </td>
+                `;
+                tableBody.appendChild(row);
+            }
+        }
+
+        // Fetch Students from Server
+        async function fetchStudents() {
+            try {
+                const response = await fetch('/student');
+                if (!response.ok) throw new Error('Network response was not ok');
+                
+                const students = await response.json();
+                const tableBody = document.querySelector('#student-table tbody');
+                tableBody.innerHTML = ''; // Clear existing data
+
+                students.forEach(student => {
+                    const row = document.createElement('tr');
+                    row.setAttribute('data-index', student.Index);
+                    row.innerHTML = `
+                        <td>${student.Name}</td>
+                        <td>${student.Index}</td>
+                        <td>${student.Reg}</td>
+                        <td>${student.Batch}</td>
+                        <td>
+                            <button id="attend-${student.Index}" onclick="markAttendance('${student.Index}')">
+                                ${student.attended ? 'Attended' : 'Attend'}
+                            </button>
+                        </td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+            } catch (error) {
+                console.error('Error fetching student data:', error);
+            }
+        }
+
+        // Mark Attendance
+        async function markAttendance(Index) {
+            try {
+                const response = await fetch(`/attend/${Index}`, { method: 'POST' });
+                const result = await response.json();
+                alert(result.message);
+
+                if (response.status === 200) {
+                    // Update button to show attendance
+                    document.getElementById(`attend-${Index}`).innerText = 'Attended';
+                    document.getElementById(`attend-${Index}`).disabled = true;
+                }
+            } catch (error) {
+                console.error('Error marking attendance:', error);
+            }
+        }
+
+        // Reset Attendance
+        document.getElementById('resetButton').addEventListener('click', () => {
+            fetch('/reset-attendance', { method: 'POST' })
+                .then(response => response.text())
+                .then(message => {
+                    alert(message);
+                    location.reload(); // Refresh the page to update the table
+                })
+                .catch(error => {
+                    console.error('Error resetting attendance:', error);
+                });
+        });
+
+    </script>
+</body>
+</html>
